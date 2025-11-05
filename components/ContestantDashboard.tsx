@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Submission } from "../types";
 import { generateHackathonTopic } from "../services/geminiServiceClient";
 import {
@@ -16,27 +16,53 @@ import UploadModal from "./UploadModal";
 import { useAppContext } from "../contexts/AppContext";
 
 const ContestantDashboard: React.FC = () => {
-  const { currentUser, handleLogout, handleAddSubmission, isLoading } =
-    useAppContext();
+  const {
+    currentUser,
+    handleLogout,
+    handleAddSubmission,
+    isLoading,
+    submissions,
+  } = useAppContext();
+
+  const existingSubmission = useMemo(
+    () =>
+      (submissions as Submission[]).find(
+        (s) => s.teamId === currentUser?.teamId
+      ),
+    [submissions, currentUser?.teamId]
+  );
+
   const [topic, setTopic] = useState<string>("");
   const [isLoadingTopic, setIsLoadingTopic] = useState<boolean>(false);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
   const [showChat, setShowChat] = useState<boolean>(false);
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
   const [notification, setNotification] = useState<string>("");
-  const [lastSubmission, setLastSubmission] = useState<Submission | null>(null);
+
+  const [lastSubmission, setLastSubmission] = useState<Submission | null>(
+    existingSubmission || null
+  );
+
   const [redrawsUsed, setRedrawsUsed] = useState(0);
+  const [error, setError] = useState("");
 
   const handleDrawTopic = useCallback(async () => {
     setIsLoadingTopic(true);
-    const newTopic = await generateHackathonTopic();
-    setTopic(newTopic);
-    setIsLoadingTopic(false);
-    if (!isTimerRunning) {
-      setIsTimerRunning(true);
-      setNotification(
-        "Topic drawn! Your 15-minute preparation time has started."
-      );
+    setError("");
+    try {
+      const newTopic = await generateHackathonTopic();
+      setTopic(newTopic);
+      if (!isTimerRunning) {
+        setIsTimerRunning(true);
+        setNotification(
+          "Topic drawn! Your 15-minute preparation time has started."
+        );
+      }
+    } catch (err) {
+      console.error("Failed to generate topic:", err);
+      setError("Could not draw a topic. Please try again.");
+    } finally {
+      setIsLoadingTopic(false);
     }
   }, [isTimerRunning]);
 
@@ -103,7 +129,7 @@ const ContestantDashboard: React.FC = () => {
       <div className="mt-6 text-left bg-white p-4 rounded-lg shadow-sm border border-slate-200">
         <p className="text-sm">
           <span className="font-semibold text-slate-700">File:</span>{" "}
-          {submission.file.name}
+          {submission.fileName}
         </p>
         <p className="text-sm">
           <span className="font-semibold text-slate-700">Topic:</span>{" "}
@@ -117,10 +143,6 @@ const ContestantDashboard: React.FC = () => {
     </div>
   );
 
-  if (!currentUser) {
-    return null; // Should be handled by page-level redirect
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -130,6 +152,10 @@ const ContestantDashboard: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  if (!currentUser) {
+    return null;
   }
 
   return (
@@ -192,15 +218,25 @@ const ContestantDashboard: React.FC = () => {
                   </blockquote>
                 ) : (
                   <div className="min-h-[150px] flex flex-col items-center justify-center">
-                    <p className="text-slate-500 text-lg">
+                    <SparklesIcon className="h-16 w-16 text-sky-400 opacity-75" />
+                    <p className="text-slate-500 text-lg font-semibold mt-4">
                       Your mission awaits.
                     </p>
-                    <p className="text-slate-400">
-                      Click the button below to receive your topic!
+                    <p className="text-slate-400 text-sm">
+                      Click the "Draw My Topic" button to begin.
                     </p>
                   </div>
                 )}
               </div>
+
+              {error && (
+                <div className="p-3 mt-4 rounded-md bg-red-50 border border-red-200">
+                  <p className="text-sm text-red-700 font-medium text-center">
+                    {error}
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
                 <button
                   onClick={handleDrawTopic}
@@ -233,19 +269,21 @@ const ContestantDashboard: React.FC = () => {
           )}
         </div>
 
-        <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-slate-200 flex flex-col items-center justify-center space-y-4">
-          <h3 className="text-xl font-semibold text-slate-800 flex items-center gap-3">
-            <TimerIcon className="h-6 w-6 text-slate-500" />
+        <div className="bg-slate-900 p-6 sm:p-8 rounded-xl shadow-lg flex flex-col items-center justify-center space-y-4">
+          <h3 className="text-xl font-semibold text-slate-100 flex items-center gap-3">
+            <TimerIcon className="h-6 w-6 text-slate-400" />
             Preparation Time
           </h3>
           {isTimerRunning ? (
-            <Timer duration={15 * 60} onTimeUp={handleTimeUp} />
+            <div className="text-5xl font-bold text-white tracking-tight">
+              <Timer duration={15 * 60} onTimeUp={handleTimeUp} />
+            </div>
           ) : (
-            <div className="text-5xl font-bold text-slate-400 tracking-tight">
+            <div className="text-5xl font-bold text-slate-300 tracking-tight">
               {lastSubmission ? "00:00" : "15:00"}
             </div>
           )}
-          <p className="text-sm text-slate-500 text-center max-w-xs">
+          <p className="text-sm text-slate-400 text-center max-w-xs">
             {lastSubmission
               ? `Submitted at ${lastSubmission.submittedAt.toLocaleTimeString()}`
               : "You have 15 minutes to prepare after drawing a topic."}
@@ -253,6 +291,7 @@ const ContestantDashboard: React.FC = () => {
         </div>
       </main>
 
+      {/* Nút Chat (Floating Action Button) */}
       <button
         onClick={() => setShowChat(true)}
         className="fixed bottom-8 right-8 bg-sky-600 text-white p-4 rounded-full shadow-lg hover:bg-sky-700 transition-transform transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-sky-300"
@@ -261,6 +300,7 @@ const ContestantDashboard: React.FC = () => {
         <ChatIcon className="h-8 w-8" />
       </button>
 
+      {/* Modals */}
       {showChat && <Chatbot onClose={() => setShowChat(false)} topic={topic} />}
       {showUploadModal && (
         <UploadModal
