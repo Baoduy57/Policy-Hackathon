@@ -118,21 +118,26 @@ export const getChatbotResponse = async (
 };
 
 const emptySuggestion: AISuggestion = {
-  awareness: { score: 0, justification: "AI Service is not available." },
-  creativity: { score: 0, justification: "AI Service is not available." },
-  practicalImpact: { score: 0, justification: "AI Service is not available." },
-  presentation: { score: 0, justification: "AI Service is not available." },
-  ethics: { score: 0, justification: "AI Service is not available." },
+  knowledgeApplication: 0,
+  criticalThinkingLogic: 0,
+  expressionStyle: 0,
+  ethics: 0,
+  socialImpact: 0,
+  totalScore: 0,
+  rating: "Yếu",
+  feedback: "AI Service is not available.",
 };
 
 export const getAIScoreSuggestion = async ({
   topic,
   notes,
-  fileContent,
+  fileBuffer,
+  fileName,
 }: {
   topic: string;
   notes: string;
-  fileContent?: string;
+  fileBuffer?: Buffer;
+  fileName?: string;
 }): Promise<AISuggestion> => {
   if (!ai) return emptySuggestion;
 
@@ -140,72 +145,150 @@ export const getAIScoreSuggestion = async ({
   console.log("[AI Scoring] Input:", {
     topic: topic.substring(0, 100) + "...",
     notes: notes.substring(0, 100) + "...",
-    hasFileContent: !!fileContent,
-    fileContentLength: fileContent?.length || 0,
+    hasFile: !!fileBuffer,
+    fileSize: fileBuffer?.length || 0,
+    fileName: fileName || "N/A",
   });
 
   try {
-    const prompt = `Bạn là giám khảo chuyên nghiệp trong một cuộc thi tranh luận chính sách về "Kinh tế Việt Nam trong kỷ nguyên AI". Hãy đánh giá bài nộp sau:
+    let pdfInlineData: any = undefined;
+    
+    // Prepare PDF as inline data for Gemini if provided
+    if (fileBuffer && fileName) {
+      try {
+        console.log("[AI Scoring] Preparing PDF for Gemini (inline data)...");
+        
+        // Convert buffer to base64
+        const base64Data = fileBuffer.toString('base64');
+        pdfInlineData = {
+          inlineData: {
+            mimeType: "application/pdf",
+            data: base64Data,
+          }
+        };
+        
+        console.log("[AI Scoring] ✅ PDF prepared:", fileBuffer.length, "bytes");
+      } catch (error) {
+        console.error("[AI Scoring] Failed to prepare PDF:", error);
+      }
+    }
+
+    const prompt = `Bạn là DebateScorer – hệ thống chấm điểm tranh biện KHÁCH QUAN.
+
+Nhiệm vụ:
+1. Dựa trên toàn bộ nội dung tranh biện từ P1–P3, chấm điểm người dùng theo 5 tiêu chí, mỗi tiêu chí từ 0–20 điểm.
+2. Tính tổng điểm TotalScore và xác định xếp loại (Rating) theo thang:
+   - Xuất sắc: 90–100
+   - Tốt: 80–89
+   - Khá: 70–79
+   - Trung bình: 60–69
+   - Yếu: <60
+3. Viết Feedback chi tiết ≤100 từ, tập trung vào điểm mạnh và điểm cần cải thiện, giọng văn học thuật và tôn trọng.
 
 ĐỀ TÀI: "${topic}"
 
 GHI CHÚ CỦA THÍ SINH: "${notes}"
 
 ${
-  fileContent
-    ? `NỘI DUNG FILE BÀI THUYẾT TRÌNH:\n${fileContent.substring(0, 10000)}\n`
-    : ""
+  !pdfInlineData
+    ? "\n⚠️ LƯU Ý: Chưa có file bài thuyết trình, chỉ đánh giá dựa trên ghi chú. Điểm có thể không chính xác hoàn toàn.\n"
+    : "\n📄 BÀI THUYẾT TRÌNH: Xem file PDF đính kèm bên dưới\n"
 }
 
-Hãy đưa ra điểm số công bằng từ 0-20 và lý do ngắn gọn (1-2 câu) cho mỗi tiêu chí sau:
-
-1. **Nhận thức (Awareness)**: Hiểu biết về vấn đề, bối cảnh Việt Nam, số liệu thực tế
-2. **Sáng tạo (Creativity)**: Tính mới mẻ, độc đáo của giải pháp, cách tiếp cận khác biệt
-3. **Tác động thực tiễn (Practical Impact)**: Khả năng triển khai, hiệu quả kinh tế-xã hội
-4. **Trình bày (Presentation)**: Cấu trúc rõ ràng, lập luận mạch lạc, dễ hiểu
-5. **Đạo đức (Ethics)**: Tính minh bạch, công bằng, bảo vệ quyền lợi người dùng
-
-${
-  !fileContent
-    ? "\n⚠️ LƯU Ý: Chưa có file bài thuyết trình, chỉ đánh giá dựa trên ghi chú. Điểm có thể không chính xác hoàn toàn.\n"
-    : ""
+--- OUTPUT FORMAT BẮT BUỘC (JSON) ---
+{
+  "KnowledgeApplication": X,          // Hiểu biết & vận dụng lý luận học thuật + thực tiễn
+  "CriticalThinkingLogic": X,        // Tư duy phản biện & logic lập luận
+  "ExpressionStyle": X,               // Kỹ năng diễn đạt & phong thái thuyết phục
+  "Ethics": X,                         // Văn hóa & đạo đức tranh biện
+  "SocialImpact": X,                   // Liên hệ bối cảnh xã hội & đề xuất giải pháp
+  "TotalScore": X,
+  "Rating": "<Xếp loại>",             // Xuất sắc | Tốt | Khá | Trung bình | Yếu
+  "Feedback": ""
 }`;
 
     const criterionSchema = {
       type: Type.OBJECT,
       properties: {
-        score: {
+        knowledgeApplication: {
           type: Type.NUMBER,
-          description: "Điểm từ 0 đến 20 cho tiêu chí này.",
+          description: "Điểm từ 0 đến 20 cho tiêu chí Hiểu biết & vận dụng.",
         },
-        justification: {
-          type: Type.STRING,
-          description: "Lý do ngắn gọn 1-2 câu cho điểm số.",
+        criticalThinkingLogic: {
+          type: Type.NUMBER,
+          description: "Điểm từ 0 đến 20 cho tiêu chí Tư duy phản biện & logic.",
+        },
+        expressionStyle: {
+          type: Type.NUMBER,
+          description: "Điểm từ 0 đến 20 cho tiêu chí Kỹ năng diễn đạt.",
+        },
+        ethics: {
+          type: Type.NUMBER,
+          description: "Điểm từ 0 đến 20 cho tiêu chí Đạo đức tranh biện.",
+        },
+        socialImpact: {
+          type: Type.NUMBER,
+          description: "Điểm từ 0 đến 20 cho tiêu chí Tác động xã hội.",
         },
       },
-      required: ["score", "justification"],
     };
+
+    // Build contents array with PDF inline data if available
+    const contents: any[] = [{ text: prompt }];
+    if (pdfInlineData) {
+      contents.push(pdfInlineData);
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt,
+      contents: contents,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            awareness: criterionSchema,
-            creativity: criterionSchema,
-            practicalImpact: criterionSchema,
-            presentation: criterionSchema,
-            ethics: criterionSchema,
+            knowledgeApplication: {
+              type: Type.NUMBER,
+              description: "Hiểu biết & vận dụng lý luận học thuật + thực tiễn (0-20)",
+            },
+            criticalThinkingLogic: {
+              type: Type.NUMBER,
+              description: "Tư duy phản biện & logic lập luận (0-20)",
+            },
+            expressionStyle: {
+              type: Type.NUMBER,
+              description: "Kỹ năng diễn đạt & phong thái thuyết phục (0-20)",
+            },
+            ethics: {
+              type: Type.NUMBER,
+              description: "Văn hóa & đạo đức tranh biện (0-20)",
+            },
+            socialImpact: {
+              type: Type.NUMBER,
+              description: "Liên hệ bối cảnh xã hội & đề xuất giải pháp (0-20)",
+            },
+            totalScore: {
+              type: Type.NUMBER,
+              description: "Tổng điểm (0-100)",
+            },
+            rating: {
+              type: Type.STRING,
+              description: "Xếp loại: Xuất sắc | Tốt | Khá | Trung bình | Yếu",
+            },
+            feedback: {
+              type: Type.STRING,
+              description: "Feedback chi tiết ≤100 từ",
+            },
           },
           required: [
-            "awareness",
-            "creativity",
-            "practicalImpact",
-            "presentation",
+            "knowledgeApplication",
+            "criticalThinkingLogic",
+            "expressionStyle",
             "ethics",
+            "socialImpact",
+            "totalScore",
+            "rating",
+            "feedback",
           ],
         },
         temperature: 0.3, // Lower for more consistent scoring
@@ -217,27 +300,14 @@ ${
   } catch (error) {
     console.error("Error getting AI score suggestion:", error);
     return {
-      ...emptySuggestion,
-      awareness: {
-        score: 0,
-        justification: "Failed to get an AI suggestion. Please score manually.",
-      },
-      creativity: {
-        score: 0,
-        justification: "Failed to get an AI suggestion. Please score manually.",
-      },
-      practicalImpact: {
-        score: 0,
-        justification: "Failed to get an AI suggestion. Please score manually.",
-      },
-      presentation: {
-        score: 0,
-        justification: "Failed to get an AI suggestion. Please score manually.",
-      },
-      ethics: {
-        score: 0,
-        justification: "Failed to get an AI suggestion. Please score manually.",
-      },
+      knowledgeApplication: 0,
+      criticalThinkingLogic: 0,
+      expressionStyle: 0,
+      ethics: 0,
+      socialImpact: 0,
+      totalScore: 0,
+      rating: "Yếu",
+      feedback: "Failed to get an AI suggestion. Please score manually.",
     };
   }
 };
@@ -252,8 +322,8 @@ export const analyzeScoringConsistency = async (
     .map((key) => ({
       criteria: key,
       judge: judgeScore[key],
-      ai: aiSuggestion[key].score,
-      diff: Math.abs(judgeScore[key] - aiSuggestion[key].score),
+      ai: aiSuggestion[key],
+      diff: Math.abs(judgeScore[key] - aiSuggestion[key]),
     }))
     .filter((d) => d.diff > 5); // Only flag differences greater than 5 points
 

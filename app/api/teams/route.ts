@@ -55,7 +55,12 @@ export async function PUT(request: NextRequest) {
       (sum: number, score: any) => sum + score,
       0
     );
-    const finalScore = bgkScore;
+    
+    // Calculate final score as the mean of judge score and AI score
+    const aiTotalScore = aiScore || 0;
+    const finalScore = aiTotalScore > 0 
+      ? Math.round((bgkScore + aiTotalScore) / 2) 
+      : bgkScore;
 
     // Update team score
     const team = await Team.findOne({ teamId });

@@ -92,10 +92,12 @@ export async function readPDFContent(fileId: string): Promise<string> {
   try {
     const pdfParse = require("pdf-parse");
 
-    // Options to disable rendering (we only need text)
+    // Options to disable rendering completely (we only need text)
     const options = {
       max: 0, // Parse all pages
       version: "v2.0.550", // Use specific version
+      // Disable all rendering to avoid canvas dependency
+      pagerender: () => Promise.resolve(""),
     };
 
     const pdfData = await pdfParse(buffer, options);
@@ -159,7 +161,12 @@ async function readPDFWithAlternative(buffer: Buffer): Promise<string> {
                   if (textItem.R) {
                     textItem.R.forEach((run: any) => {
                       if (run.T) {
-                        text += decodeURIComponent(run.T) + " ";
+                        try {
+                          text += decodeURIComponent(run.T) + " ";
+                        } catch (e) {
+                          // If decodeURIComponent fails, use raw text
+                          text += run.T + " ";
+                        }
                       }
                     });
                   }
@@ -169,10 +176,16 @@ async function readPDFWithAlternative(buffer: Buffer): Promise<string> {
             });
           }
 
+          const trimmedText = text.trim();
           console.log(
-            `[GridFS] PDF parsed with pdf2json: ${text.length} chars`
+            `[GridFS] PDF parsed with pdf2json: ${text.length} chars (${trimmedText.length} after trim)`
           );
-          resolve(text.trim());
+          
+          if (trimmedText.length < 50) {
+            console.log(`[GridFS] ⚠️ Very little text extracted. Sample: "${trimmedText}"`);
+          }
+          
+          resolve(trimmedText);
         } catch (error) {
           reject(error);
         }

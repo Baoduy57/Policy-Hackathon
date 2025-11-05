@@ -12,11 +12,11 @@ import { useAppContext } from "../contexts/AppContext";
 interface JudgeDashboardProps {}
 
 const ScoringCriteria: { id: keyof JudgeScore; name: string; max: number }[] = [
-  { id: "awareness", name: "Awareness", max: 20 },
-  { id: "creativity", name: "Creativity", max: 20 },
-  { id: "practicalImpact", name: "Practical Impact", max: 20 },
-  { id: "presentation", name: "Presentation", max: 20 },
+  { id: "knowledgeApplication", name: "Knowledge Application", max: 20 },
+  { id: "criticalThinkingLogic", name: "Critical Thinking & Logic", max: 20 },
+  { id: "expressionStyle", name: "Expression & Style", max: 20 },
   { id: "ethics", name: "Ethics", max: 20 },
+  { id: "socialImpact", name: "Social Impact", max: 20 },
 ];
 
 const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
@@ -54,19 +54,19 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
   const selectedTeamScores = useMemo(() => {
     if (!selectedTeamId)
       return {
-        awareness: 0,
-        creativity: 0,
-        practicalImpact: 0,
-        presentation: 0,
+        knowledgeApplication: 0,
+        criticalThinkingLogic: 0,
+        expressionStyle: 0,
         ethics: 0,
+        socialImpact: 0,
       };
     return (
       scores[selectedTeamId] || {
-        awareness: 0,
-        creativity: 0,
-        practicalImpact: 0,
-        presentation: 0,
+        knowledgeApplication: 0,
+        criticalThinkingLogic: 0,
+        expressionStyle: 0,
         ethics: 0,
+        socialImpact: 0,
       }
     );
   }, [selectedTeamId, scores]);
@@ -85,51 +85,25 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
         setIsLoadingAiScore(true);
         setAiSuggestion(null);
 
-        const getScoreWithFileContent = async () => {
-          let fileContent: string | undefined = undefined;
+        const getAISuggestionForSubmission = async () => {
+          console.log("[Judge] Getting AI suggestion for submission:", {
+            fileId: selectedTeamSubmission.fileId,
+            fileName: selectedTeamSubmission.fileName,
+          });
 
-          // Try to read file content if fileId exists
-          if (selectedTeamSubmission.fileId) {
-            try {
-              console.log(
-                "[Judge] Reading file from GridFS:",
-                selectedTeamSubmission.fileId
-              );
-              const readResponse = await fetch("/api/read-file", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  fileId: selectedTeamSubmission.fileId,
-                  fileName: selectedTeamSubmission.fileName,
-                }),
-              });
-
-              if (readResponse.ok) {
-                const readData = await readResponse.json();
-                fileContent = readData.content;
-                console.log(
-                  `[Judge] File content read: ${readData.length} chars`
-                );
-              } else {
-                console.warn("[Judge] Could not read file content");
-              }
-            } catch (error) {
-              console.error("[Judge] Error reading file:", error);
-            }
-          }
-
-          // Get AI suggestion with or without file content
+          // Get AI suggestion - PDF will be uploaded directly to Gemini
           const suggestion = await getAIScoreSuggestion({
             topic: selectedTeamSubmission.topic,
             notes: selectedTeamSubmission.notes,
-            fileContent,
+            fileId: selectedTeamSubmission.fileId,
+            fileName: selectedTeamSubmission.fileName,
           });
 
           setAiSuggestion(suggestion);
           setIsLoadingAiScore(false);
         };
 
-        getScoreWithFileContent();
+        getAISuggestionForSubmission();
       } else {
         setAiSuggestion(null);
       }
@@ -145,11 +119,11 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
       ...prev,
       [teamId]: {
         ...(prev[teamId] || {
-          awareness: 0,
-          creativity: 0,
-          practicalImpact: 0,
-          presentation: 0,
+          knowledgeApplication: 0,
+          criticalThinkingLogic: 0,
+          expressionStyle: 0,
           ethics: 0,
+          socialImpact: 0,
         }),
         [criteria]: value,
       },
@@ -157,13 +131,7 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
   };
 
   const totalAiScore = useMemo(
-    () =>
-      aiSuggestion
-        ? Object.values(aiSuggestion).reduce(
-            (sum, criterion) => sum + criterion.score,
-            0
-          )
-        : 0,
+    () => aiSuggestion ? aiSuggestion.totalScore : 0,
     [aiSuggestion]
   );
   const totalScore = useMemo(
@@ -459,11 +427,8 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
                       aiSuggestion && (
                         <div className="mt-2 text-sm text-sky-800 bg-sky-50 p-3 rounded-md border border-sky-100">
                           <span className="font-semibold">
-                            AI Suggestion: {aiSuggestion[criteria.id].score}/
-                            {criteria.max}.
-                          </span>
-                          <span className="italic ml-1">
-                            "{aiSuggestion[criteria.id].justification}"
+                            AI Suggestion: {aiSuggestion[criteria.id]}/
+                            {criteria.max}
                           </span>
                         </div>
                       )
@@ -482,9 +447,16 @@ const JudgeDashboard: React.FC<JudgeDashboardProps> = () => {
                     <div className="text-xl font-semibold text-sky-800">
                       AI Total:{" "}
                       <span className="text-sky-600">{totalAiScore}/100</span>
+                      <span className="ml-2 text-sm">({aiSuggestion.rating})</span>
                     </div>
                   )}
                 </div>
+                {aiSuggestion && aiSuggestion.feedback && (
+                  <div className="mt-4 p-4 bg-sky-50 border border-sky-200 rounded-lg">
+                    <p className="text-sm font-semibold text-sky-900">AI Feedback:</p>
+                    <p className="text-sm text-sky-800 mt-1">{aiSuggestion.feedback}</p>
+                  </div>
+                )}
                 <textarea
                   className="mt-4 w-full p-3 border-2 border-slate-200 rounded-lg text-slate-900 bg-slate-50 focus:ring-sky-500 focus:border-sky-500"
                   rows={3}
