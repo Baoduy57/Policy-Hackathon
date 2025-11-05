@@ -19,11 +19,11 @@ export interface Score {
 }
 
 export interface JudgeScore {
-  awareness: number;
-  creativity: number;
-  practicalImpact: number;
-  presentation: number;
+  knowledgeApplication: number;
+  criticalThinkingLogic: number;
+  expressionStyle: number;
   ethics: number;
+  socialImpact: number;
 }
 
 export interface AIScoreCriterion {
@@ -32,11 +32,14 @@ export interface AIScoreCriterion {
 }
 
 export interface AISuggestion {
-  awareness: AIScoreCriterion;
-  creativity: AIScoreCriterion;
-  practicalImpact: AIScoreCriterion;
-  presentation: AIScoreCriterion;
-  ethics: AIScoreCriterion;
+  knowledgeApplication: number;
+  criticalThinkingLogic: number;
+  expressionStyle: number;
+  ethics: number;
+  socialImpact: number;
+  totalScore: number;
+  rating: string;
+  feedback: string;
 }
 
 export interface Team {

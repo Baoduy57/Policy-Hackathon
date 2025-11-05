@@ -4,17 +4,31 @@ import {
   analyzeScoringConsistency,
 } from "@/services/geminiService";
 import { JudgeScore, AISuggestion } from "@/types";
+import { downloadFromGridFS } from "@/lib/gridfs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, topic, notes, fileContent, judgeScore, aiSuggestion } =
+    const { action, topic, notes, fileId, fileName, judgeScore, aiSuggestion } =
       await request.json();
 
     if (action === "suggest") {
+      // Download PDF buffer from GridFS if fileId provided
+      let fileBuffer: Buffer | undefined;
+      if (fileId) {
+        try {
+          console.log("[Score API] Downloading file from GridFS:", fileId);
+          fileBuffer = await downloadFromGridFS(fileId);
+          console.log("[Score API] ✅ File downloaded:", fileBuffer.length, "bytes");
+        } catch (error) {
+          console.error("[Score API] Failed to download file:", error);
+        }
+      }
+
       const suggestion = await getAIScoreSuggestion({
         topic,
         notes,
-        fileContent,
+        fileBuffer,
+        fileName,
       });
       return NextResponse.json({ suggestion });
     }

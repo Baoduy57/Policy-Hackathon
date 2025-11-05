@@ -77,28 +77,30 @@ export const getChatbotResponse = async (
 export const getAIScoreSuggestion = async ({
   topic,
   notes,
-  fileContent,
+  fileId,
+  fileName,
 }: {
   topic: string;
   notes: string;
-  fileContent?: string;
+  fileId?: string;
+  fileName?: string;
 }): Promise<AISuggestion> => {
   const emptySuggestion: AISuggestion = {
-    awareness: { score: 0, justification: "AI Service is not available." },
-    creativity: { score: 0, justification: "AI Service is not available." },
-    practicalImpact: {
-      score: 0,
-      justification: "AI Service is not available.",
-    },
-    presentation: { score: 0, justification: "AI Service is not available." },
-    ethics: { score: 0, justification: "AI Service is not available." },
+    knowledgeApplication: 0,
+    criticalThinkingLogic: 0,
+    expressionStyle: 0,
+    ethics: 0,
+    socialImpact: 0,
+    totalScore: 0,
+    rating: "Yếu",
+    feedback: "AI Service is not available.",
   };
 
   try {
     const response = await fetch("/api/score-suggestion", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "suggest", topic, notes, fileContent }),
+      body: JSON.stringify({ action: "suggest", topic, notes, fileId, fileName }),
     });
 
     if (!response.ok) {
